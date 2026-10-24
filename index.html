@@ -178,8 +178,19 @@
     background: rgba(16,26,36,.85); border-color: rgba(61,91,115,.9);
     box-shadow: 0 4px 12px rgba(0,0,0,.45);
   }
-  .float .rec { background: rgba(53,25,26,.9); }
-  .float .rec.recording { background: #c2261a; }
+  .float .danger { color: #ffb3ad; }
+
+  /* индикатор записи поверх поля */
+  .rec-pill {
+    position: absolute; top: 8px; left: 8px; z-index: 30;
+    height: 32px; padding: 0 12px; gap: 6px; border-radius: 16px;
+    background: #c2261a; border-color: #ff6b5e; color: #fff;
+    font-size: 13px; font-weight: 700;
+    animation: pulse 1.2s infinite;
+  }
+  .rec-pill[hidden] { display: none; }
+  .mi .cnt { margin-left: auto; padding-left: 12px; color: #7f97ab; font-size: 13px; }
+  .mi.rec-on { color: #ff9a90; }
 
   /* ---------- фишки ---------- */
   .token {
@@ -310,10 +321,12 @@
 
     <!-- когда панель скрыта -->
     <div class="float">
-      <button data-act="rec" class="rec ed" title="Запись">●</button>
+      <button data-act="clearAll" class="ed danger" title="Очистить всё">🗑</button>
       <button data-act="undo" class="ed" title="Шаг назад">↶</button>
       <button id="showBtn" title="Показать панель">☰</button>
     </div>
+
+    <button class="rec-pill" id="recPill" hidden title="Остановить запись">● <span id="recTime">0с</span> · стоп</button>
   </div>
 
   <!-- ===== Плеер ===== -->
@@ -339,8 +352,6 @@
   <div class="toolbar" id="toolbar">
     <button data-tool="select" class="active" title="Двигать фишки">✋</button>
     <button data-tool="pen" class="ed" title="Карандаш">✏️</button>
-    <button data-tool="eraser" class="ed" title="Ластик">⌫</button>
-
     <div class="menu-wrap ed">
       <button id="colorBtn" data-menu="colorMenu" title="Цвет и толщина"><span class="dot"></span></button>
       <div class="menu" id="colorMenu" hidden>
@@ -372,17 +383,19 @@
       </div>
     </div>
 
-    <button data-act="rec" class="rec ed" title="Запись">●</button>
-    <button id="libBtn" title="Записи">📼<span class="badge" id="libBadge" hidden></span></button>
-
     <div class="menu-wrap">
       <button id="moreBtn" data-menu="moreMenu" title="Ещё">⋯</button>
       <div class="menu" id="moreMenu" hidden>
+        <button class="mi ed" data-tool="eraser"><span class="ic">⌫</span>Ластик</button>
+        <button class="mi ed" data-act="rec"><span class="ic">●</span><span id="recLabel">Начать запись</span></button>
+        <button class="mi" id="libBtn"><span class="ic">📼</span>Записи<span class="cnt" id="libBadge"></span></button>
+        <hr>
         <button class="mi" id="viewBtn"><span class="ic">▭</span><span id="viewLabel">Поле: полное</span></button>
         <button class="mi" id="flipBtn"><span class="ic">🔄</span>Перевернуть</button>
         <hr>
         <button class="mi danger ed" id="clearBtn"><span class="ic">✕</span>Стереть все линии</button>
         <button class="mi danger ed" id="clearTokens"><span class="ic">✕</span>Убрать все фишки</button>
+        <button class="mi danger ed" data-act="clearAll"><span class="ic">🗑</span>Очистить всё</button>
         <hr>
         <button class="mi" id="hideBtn"><span class="ic">⌄</span>Скрыть панель</button>
       </div>
@@ -542,7 +555,7 @@
     const f = F;
     const r = 100;
     const gl = f(64), gr = f(936), c = f(500);
-    const lh = 136, lw = lh * LOGO_AR;   // логотип внутри центрального круга (r = 72)
+    const lh = 104, lw = lh * LOGO_AR;   // логотип целиком внутри центрального круга (r = 72)
 
     rinkContent.innerHTML = `
       <clipPath id="iceClip"><rect x="10" y="10" width="${L - 20}" height="405" rx="${r}" ry="${r}"/></clipPath>
@@ -780,19 +793,20 @@
 
   let lastRecLabel = null;
   function updateRecUI() {
-    recBtns.forEach(b => {
-      b.classList.toggle('recording', !!rec);
-      b.title = rec ? 'Остановить запись' : 'Начать запись';
-    });
+    recBtns.forEach(b => b.classList.toggle('rec-on', !!rec));
+    $('recPill').hidden = !rec;
     lastRecLabel = null;
     updateRecLabel();
   }
   function updateRecLabel() {
-    const label = rec ? Math.floor(recNow()) + 'с' : '●';
+    const secs = Math.floor(recNow()) + 'с';
+    const label = rec ? 'Остановить запись · ' + secs : 'Начать запись';
     if (label === lastRecLabel) return;
     lastRecLabel = label;
-    recBtns.forEach(b => { b.textContent = label; });
+    $('recLabel').textContent = label;
+    $('recTime').textContent = secs;
   }
+  $('recPill').addEventListener('click', () => stopRecording());
 
   recBtns.forEach(b => b.addEventListener('click', () => {
     if (replayMode) return;
@@ -886,6 +900,10 @@
       case 'removeToken': tokenDelP(a.d.id); break;
       case 'moveToken':   tokenMoveP(a.id, a.to.x, a.to.y); break;
       case 'clearTokens': for (const d of a.items) tokenDelP(d.id); break;
+      case 'clearAll':
+        strokes = []; pushEvent({ type: 'clearStrokes' });
+        for (const d of a.tokens) tokenDelP(d.id);
+        break;
     }
   }
 
@@ -898,6 +916,10 @@
       case 'removeToken': tokenAddP(a.d); break;
       case 'moveToken':   tokenMoveP(a.id, a.from.x, a.from.y); break;
       case 'clearTokens': for (const d of a.items) tokenAddP(d); break;
+      case 'clearAll':
+        for (const s of a.strokes) strokeAddP(s);
+        for (const d of a.tokens) tokenAddP(d);
+        break;
     }
   }
 
@@ -1011,6 +1033,7 @@
   function setTool(t) {
     tool = t;
     toolBtns.forEach(b => b.classList.toggle('active', b.dataset.tool === t));
+    $('moreBtn').classList.toggle('active', t === 'eraser');
     board.style.cursor = t === 'select' ? 'default' : t === 'eraser' ? 'cell' : 'crosshair';
     if (t !== 'select') clearSelection();
     updatePointerEvents();
@@ -1018,6 +1041,7 @@
   toolBtns.forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
 
   function closeMenus() { menus.forEach(m => { m.hidden = true; }); }
+  menus.forEach(m => m.addEventListener('click', e => { if (e.target.closest('.mi')) closeMenus(); }));
 
   // держим меню целиком на экране
   function placeMenu(m) {
@@ -1082,6 +1106,16 @@
     pushEvent({ type: 'clearTokens' });
     commit({ t: 'clearTokens', items });
   });
+
+  $$('[data-act="clearAll"]').forEach(b => b.addEventListener('click', () => {
+    closeMenus();
+    if (replayMode || (!strokes.length && !tokens.size)) return;
+    const a = { t: 'clearAll', strokes: strokes.slice(), tokens: [...tokens.values()].map(x => ({ ...x.d })) };
+    applyAction(a);
+    commit(a);
+    clearSelection();
+    redraw();
+  }));
 
   $('viewBtn').addEventListener('click', () => {
     closeMenus();
