@@ -1,0 +1,1384 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Тактическая доска</title>
+<style>
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    overflow: hidden; overscroll-behavior: none;
+  }
+
+  body {
+    background: radial-gradient(1000px 600px at 50% -10%, #1b2a3a, #0a1016 70%);
+    background-color: #0a1016;
+    color: #dbe6f0;
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+  }
+
+  .app {
+    height: 100vh; height: 100dvh;
+    display: flex; flex-direction: column; gap: 4px;
+    padding: calc(2px + env(safe-area-inset-top)) calc(3px + env(safe-area-inset-right))
+             calc(3px + env(safe-area-inset-bottom)) calc(3px + env(safe-area-inset-left));
+  }
+
+  /* ---------- панель ---------- */
+  .toolbar {
+    flex: none;
+    display: flex; flex-direction: column; gap: 4px;
+    background: #101a24; border: 1px solid #22303d;
+    border-radius: 10px; padding: 5px;
+  }
+  .collapsed .toolbar { display: none; }
+
+  .row { display: flex; flex-wrap: nowrap; align-items: stretch; gap: 4px; width: 100%; }
+  .row > button, .row > .menu-wrap, .row > input { flex: 1 1 0%; min-width: 0; }
+  .row .wide  { flex: 1.6 1 0%; }
+  .row .range { flex: 1.8 1 0%; }
+
+  button {
+    position: relative;
+    font: inherit; font-size: 15px; line-height: 1;
+    color: #cfe0ee; background: #1b2733;
+    border: 1px solid #2b3d4d; border-radius: 8px;
+    height: 34px; padding: 0 2px; cursor: pointer;
+    transition: background .15s, border-color .15s, color .15s, opacity .15s;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    touch-action: manipulation;
+    display: flex; align-items: center; justify-content: center;
+  }
+  button.txt { font-size: 11.5px; }
+  button:active { transform: translateY(1px); }
+  button.active {
+    background: #2f7dd1; border-color: #57a5ee; color: #fff;
+    box-shadow: 0 0 0 2px rgba(87,165,238,.25);
+  }
+  @media (hover: hover) {
+    button:hover { background: #24384a; border-color: #3d5b73; }
+    button.active:hover { background: #2f7dd1; }
+  }
+
+  input[type=range] { accent-color: #4a9ae8; cursor: pointer; margin: 0; width: 100%; }
+
+  /* цвет */
+  #colorBtn .dot {
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--c, #111111);
+    box-shadow: 0 0 0 2px rgba(255,255,255,.6);
+  }
+  .sw {
+    width: 34px; height: 34px; padding: 0; border-radius: 50%;
+    background: var(--c) !important; border: 2px solid transparent; flex: none;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.25);
+  }
+  .sw.active { border-color: #fff; box-shadow: 0 0 0 3px rgba(255,255,255,.18); }
+
+  /* меню */
+  .menu-wrap { position: relative; display: flex; }
+  .menu-wrap > button { width: 100%; }
+  .menu {
+    position: absolute; top: calc(100% + 6px); left: 0; z-index: 60;
+    background: #16222e; border: 1px solid #2b3d4d; border-radius: 10px;
+    padding: 8px; display: flex; flex-wrap: wrap; gap: 8px; width: max-content; max-width: 90vw;
+    box-shadow: 0 14px 30px rgba(0,0,0,.6);
+  }
+  .menu[hidden] { display: none; }
+  .menu.col { flex-direction: column; gap: 6px; }
+  .menu.col button { justify-content: flex-start; padding: 0 14px; font-size: 14px; height: 40px; }
+
+  .add-home { border-color: #7a2b25 !important; background: #35191a !important; color: #ffb3ad !important; }
+  .add-away { border-color: #24527a !important; background: #14263a !important; color: #a9cdf3 !important; }
+  .add-puck { border-color: #3a4750 !important; background: #1d242b !important; color: #cdd8e2 !important; }
+
+  .rec { border-color: #7a2b25; background: #35191a; color: #ff9a90; font-size: 13px; }
+  .rec.recording {
+    background: #c2261a; border-color: #ff6b5e; color: #fff;
+    animation: pulse 1.2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(226,57,70,.55); }
+    50%     { box-shadow: 0 0 0 6px rgba(226,57,70,0); }
+  }
+
+  .badge {
+    position: absolute; top: 2px; right: 3px;
+    min-width: 15px; height: 15px; padding: 0 3px; border-radius: 8px;
+    background: #2f7dd1; color: #fff; font-size: 10px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .badge[hidden] { display: none; }
+
+  /* неактивно во время повтора */
+  .replay-mode .ed { opacity: .3; pointer-events: none; }
+
+  /* ---------- поле ---------- */
+  .stage {
+    flex: 1 1 auto; min-height: 0; position: relative;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+
+  .board {
+    position: relative; overflow: hidden; border-radius: 10px;
+    touch-action: none; flex: none;
+    box-shadow: 0 16px 40px -18px #000;
+  }
+
+  .rink, #draw, #tokens, #replayTokens {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+  }
+  .rink { z-index: 1; display: block; }
+  #draw { z-index: 2; }
+  #tokens, #replayTokens { z-index: 3; }
+
+  #replayTokens { display: none; pointer-events: none; }
+  .replay-mode #replayTokens { display: block; }
+  .replay-mode #tokens { display: none; }
+
+  /* мини-панель, когда основная скрыта */
+  .mini {
+    position: absolute; top: 4px; right: 2px; z-index: 30;
+    display: none; flex-direction: column; gap: 5px;
+  }
+  .collapsed .mini { display: flex; }
+  .mini button {
+    width: 36px; height: 36px; padding: 0; font-size: 15px;
+    background: rgba(16,26,36,.85); border-color: rgba(61,91,115,.9);
+    box-shadow: 0 4px 10px rgba(0,0,0,.4);
+  }
+  .mini button.active { background: rgba(47,125,209,.95); }
+  .mini .rec { background: rgba(53,25,26,.9); font-size: 12px; }
+  .mini .rec.recording { background: #c2261a; }
+
+  /* ---------- фишки ---------- */
+  .token {
+    position: absolute;
+    width: calc(44 * var(--u, 1px));
+    height: calc(44 * var(--u, 1px));
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    display: grid; place-items: center;
+    font-size: calc(19 * var(--u, 1px));
+    font-weight: 700; color: #fff;
+    text-shadow: 0 1px 2px rgba(0,0,0,.55);
+    cursor: grab;
+    border: 2px solid rgba(255,255,255,.85);
+    box-shadow: 0 3px 8px rgba(0,0,0,.45), inset 0 -3px 6px rgba(0,0,0,.25);
+    will-change: left, top; touch-action: none;
+  }
+  .token.home { background: radial-gradient(circle at 35% 30%, #ff7a6e, #c2261a 75%); }
+  .token.away { background: radial-gradient(circle at 35% 30%, #6fb3f5, #1a52a0 75%); }
+  .token.puck {
+    width: calc(22 * var(--u, 1px));
+    height: calc(22 * var(--u, 1px));
+    background: radial-gradient(circle at 35% 30%, #4a4a4a, #0b0b0b 75%);
+    border: 2px solid #8b98a3; font-size: 0;
+  }
+  .token.dragging {
+    cursor: grabbing;
+    transform: translate(-50%, -50%) scale(1.12);
+    box-shadow: 0 8px 18px rgba(0,0,0,.6); z-index: 10;
+  }
+  .token.selected { box-shadow: 0 0 0 3px #ffd166, 0 4px 10px rgba(0,0,0,.5); }
+
+  /* ---------- воспроизведение ---------- */
+  .playback-bar {
+    flex: none;
+    background: #101a24; border: 1px solid #22303d;
+    border-radius: 10px; padding: 7px 8px;
+    display: flex; flex-direction: column; gap: 7px;
+  }
+  .playback-bar[hidden] { display: none; }
+
+  .pb-top { display: flex; align-items: center; gap: 6px; }
+  #pbName {
+    flex: 1; min-width: 0; font-size: 13px; font-weight: 600;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .pb-top button { width: 40px; flex: none; }
+
+  .progress {
+    height: 22px; display: flex; align-items: center;
+    cursor: pointer; touch-action: none;
+  }
+  .progress-track { width: 100%; height: 8px; background: #1b2733; border-radius: 4px; overflow: hidden; }
+  .progress-fill {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, #2f7dd1, #57a5ee);
+  }
+
+  .pb-bottom { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #9fb8cd; }
+  .pb-bottom input { flex: 1; }
+  #speedLabel { min-width: 38px; text-align: center; font-weight: 700; color: #dbe6f0; }
+  #pbTime { font-variant-numeric: tabular-nums; color: #8ba3b8; white-space: nowrap; }
+
+  /* ---------- шторка записей ---------- */
+  .backdrop {
+    position: fixed; inset: 0; z-index: 90;
+    background: rgba(0,0,0,.5);
+    opacity: 0; pointer-events: none; transition: opacity .2s;
+  }
+  .backdrop.open { opacity: 1; pointer-events: auto; }
+
+  .sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 100;
+    max-height: 65vh; max-height: 65dvh;
+    display: flex; flex-direction: column;
+    background: #101a24; border-top: 1px solid #2b3d4d;
+    border-radius: 16px 16px 0 0;
+    padding: 8px 12px calc(12px + env(safe-area-inset-bottom));
+    transform: translateY(105%); transition: transform .25s ease;
+    box-shadow: 0 -12px 30px rgba(0,0,0,.5);
+  }
+  .sheet.open { transform: none; }
+  .sheet-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex: none; }
+  .sheet-head h2 {
+    flex: 1; margin: 0; font-size: 13px; font-weight: 600; color: #7f97ab;
+    text-transform: uppercase; letter-spacing: .6px;
+  }
+  .sheet-head button { width: 38px; flex: none; }
+  .sheet-body { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+
+  #libList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .lib-item {
+    display: flex; align-items: center; gap: 8px;
+    background: #17222d; border: 1px solid #22303d;
+    border-radius: 10px; padding: 7px 8px;
+  }
+  .lib-info { flex: 1; min-width: 0; }
+  .lib-name {
+    font-size: 14px; font-weight: 600; color: #dbe6f0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .lib-meta { font-size: 11px; color: #7f97ab; margin-top: 2px; }
+  .lib-actions { display: flex; gap: 6px; }
+  .lib-actions button { width: 42px; height: 38px; }
+  .lib-actions .play { background: #1d3a57; border-color: #2f6597; color: #fff; }
+  .empty { font-size: 13px; color: #6f8698; margin: 6px 0 4px; text-align: center; }
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <!-- ===== Панель ===== -->
+  <div class="toolbar" id="toolbar">
+    <div class="row">
+      <button data-tool="select" class="active" title="Выбор / перемещение">✋</button>
+      <button data-tool="pen" class="ed" title="Карандаш">✏️</button>
+      <button data-tool="eraser" class="ed" title="Ластик">⌫</button>
+
+      <div class="menu-wrap ed">
+        <button id="colorBtn" title="Цвет"><span class="dot"></span></button>
+        <div class="menu" id="colorMenu" hidden>
+          <button class="sw active" data-color="#111111" style="--c:#111111" title="Чёрный"></button>
+          <button class="sw" data-color="#e63946" style="--c:#e63946" title="Красный"></button>
+          <button class="sw" data-color="#2f7dd1" style="--c:#2f7dd1" title="Синий"></button>
+          <button class="sw" data-color="#2fb56b" style="--c:#2fb56b" title="Зелёный"></button>
+          <button class="sw" data-color="#f2a33c" style="--c:#f2a33c" title="Оранжевый"></button>
+          <button class="sw" data-color="#a56bf0" style="--c:#a56bf0" title="Фиолетовый"></button>
+        </div>
+      </div>
+
+      <input type="range" class="range ed" id="widthRange" min="2" max="14" value="5" title="Толщина">
+
+      <div class="menu-wrap ed">
+        <button id="addBtn" title="Добавить фишку">＋</button>
+        <div class="menu col" id="addMenu" hidden>
+          <button class="add-home" data-add="home">+A Игрок</button>
+          <button class="add-away" data-add="away">+B Игрок</button>
+          <button class="add-puck" data-add="puck">+● Шайба</button>
+        </div>
+      </div>
+
+      <button id="hideBtn" title="Скрыть панель">⌃</button>
+    </div>
+
+    <div class="row">
+      <button data-act="undo" class="ed" title="Шаг назад">↶</button>
+      <button data-act="redo" class="ed" title="Шаг вперёд">↷</button>
+      <button id="clearBtn" class="txt wide ed" title="Стереть все линии">✕ Линии</button>
+      <button id="clearTokens" class="txt wide ed" title="Убрать все фишки">✕ Фишки</button>
+      <button id="viewBtn" class="txt wide" title="Полное поле / половина">Полное</button>
+      <button id="flipBtn" title="Перевернуть / другая половина">🔄</button>
+      <button data-act="rec" class="rec ed" title="Запись">●</button>
+      <button id="libBtn" title="Записи">📼<span class="badge" id="libBadge" hidden></span></button>
+    </div>
+  </div>
+
+  <!-- ===== Поле ===== -->
+  <div class="stage" id="stage">
+    <div class="board" id="board">
+      <svg class="rink" id="rinkSvg" viewBox="0 0 1000 425" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <clipPath id="iceClip">
+            <rect x="10" y="10" width="980" height="405" rx="100" ry="100"/>
+          </clipPath>
+          <radialGradient id="iceGrad" cx="50%" cy="38%" r="78%">
+            <stop offset="0%"   stop-color="#ffffff"/>
+            <stop offset="100%" stop-color="#e6eff7"/>
+          </radialGradient>
+        </defs>
+        <rect x="-2000" y="-2000" width="5000" height="5000" fill="#070d12"/>
+        <g id="rinkContent">
+          <rect x="10" y="10" width="980" height="405" rx="100" ry="100" fill="url(#iceGrad)"/>
+          <g clip-path="url(#iceClip)">
+            <rect x="373" y="0" width="10" height="425" fill="#2f74c0" opacity=".9"/>
+            <rect x="617" y="0" width="10" height="425" fill="#2f74c0" opacity=".9"/>
+            <rect x="495" y="0" width="10" height="425" fill="#d33a3a"/>
+            <rect x="62"  y="0" width="4" height="425" fill="#d33a3a"/>
+            <rect x="934" y="0" width="4" height="425" fill="#d33a3a"/>
+
+            <g fill="none" stroke="#d33a3a" stroke-width="3">
+              <circle cx="500" cy="212.5" r="72"/>
+              <circle cx="162" cy="108"   r="72"/>
+              <circle cx="162" cy="317"   r="72"/>
+              <circle cx="838" cy="108"   r="72"/>
+              <circle cx="838" cy="317"   r="72"/>
+            </g>
+
+            <g fill="#d33a3a">
+              <circle cx="500" cy="212.5" r="6"/>
+              <circle cx="162" cy="108" r="6"/>
+              <circle cx="162" cy="317" r="6"/>
+              <circle cx="838" cy="108" r="6"/>
+              <circle cx="838" cy="317" r="6"/>
+              <circle cx="402" cy="108" r="6"/>
+              <circle cx="402" cy="317" r="6"/>
+              <circle cx="598" cy="108" r="6"/>
+              <circle cx="598" cy="317" r="6"/>
+            </g>
+
+            <path d="M64 174.5 A 38 38 0 0 1 64 250.5 Z"  fill="#b8d8ee" stroke="#d33a3a" stroke-width="2"/>
+            <path d="M936 174.5 A 38 38 0 0 0 936 250.5 Z" fill="#b8d8ee" stroke="#d33a3a" stroke-width="2"/>
+
+            <rect x="44"  y="198" width="20" height="29" rx="5" fill="#ffffff" stroke="#d33a3a" stroke-width="2"/>
+            <rect x="936" y="198" width="20" height="29" rx="5" fill="#ffffff" stroke="#d33a3a" stroke-width="2"/>
+          </g>
+          <rect x="10" y="10" width="980" height="405" rx="100" ry="100"
+                fill="none" stroke="#8ea6ba" stroke-width="8"/>
+        </g>
+      </svg>
+
+      <div id="tokens"></div>
+      <div id="replayTokens"></div>
+      <canvas id="draw"></canvas>
+    </div>
+
+    <!-- мини-панель -->
+    <div class="mini" id="mini">
+      <button id="showBtn" title="Показать панель">☰</button>
+      <button data-tool="select" class="active" title="Выбор">✋</button>
+      <button data-tool="pen" class="ed" title="Карандаш">✏️</button>
+      <button data-tool="eraser" class="ed" title="Ластик">⌫</button>
+      <button data-act="undo" class="ed" title="Шаг назад">↶</button>
+      <button data-act="rec" class="rec ed" title="Запись">●</button>
+    </div>
+  </div>
+
+  <!-- ===== Плеер ===== -->
+  <div class="playback-bar" id="playbackBar" hidden>
+    <div class="pb-top">
+      <span id="pbName">—</span>
+      <button id="restartBtn" title="С начала">⟲</button>
+      <button id="pauseBtn" title="Пауза / играть">⏸</button>
+      <button id="stopBtn" title="Выйти из повтора">⏹</button>
+    </div>
+    <div class="progress" id="progressWrap">
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    </div>
+    <div class="pb-bottom">
+      <span>Скорость</span>
+      <input type="range" id="speedRange" min="0" max="5" step="1" value="2">
+      <span id="speedLabel">1x</span>
+      <span id="pbTime">0.0 / 0.0 с</span>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Шторка записей ===== -->
+<div class="backdrop" id="backdrop"></div>
+<div class="sheet" id="sheet">
+  <div class="sheet-head">
+    <h2>Записи</h2>
+    <button id="sheetClose" title="Закрыть">✕</button>
+  </div>
+  <div class="sheet-body">
+    <ul id="libList"></ul>
+    <p class="empty" id="libEmpty">Пока нет записей. Нажмите ● чтобы записать.</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const W = 1000, H = 425, HALF = 590;   // 590 — половина поля вместе с центральным кругом
+  const SPEEDS = [0.25, 0.5, 1, 2, 4, 8];
+  const LS_KEY = 'hockey-board-lib-v1';
+  const UI_KEY = 'hockey-board-ui-v1';
+
+  const $ = id => document.getElementById(id);
+  const $$ = sel => Array.from(document.querySelectorAll(sel));
+
+  const app         = $('app');
+  const stage       = $('stage');
+  const board       = $('board');
+  const rinkSvg     = $('rinkSvg');
+  const rinkContent = $('rinkContent');
+  const canvas      = $('draw');
+  const ctx         = canvas.getContext('2d');
+  const tokensEl    = $('tokens');
+  const replayEl    = $('replayTokens');
+
+  const widthRange  = $('widthRange');
+  const viewBtn     = $('viewBtn');
+  const flipBtn     = $('flipBtn');
+  const clearBtn    = $('clearBtn');
+  const clearTokensBtn = $('clearTokens');
+  const hideBtn     = $('hideBtn');
+  const showBtn     = $('showBtn');
+  const colorBtn    = $('colorBtn');
+  const colorMenu   = $('colorMenu');
+  const addBtn      = $('addBtn');
+  const addMenu     = $('addMenu');
+  const libBtn      = $('libBtn');
+  const libBadge    = $('libBadge');
+
+  const playbackBar = $('playbackBar');
+  const pbName      = $('pbName');
+  const pauseBtn    = $('pauseBtn');
+  const restartBtn  = $('restartBtn');
+  const stopBtn     = $('stopBtn');
+  const speedRange  = $('speedRange');
+  const speedLabel  = $('speedLabel');
+  const progressWrap = $('progressWrap');
+  const progressFill = $('progressFill');
+  const pbTime      = $('pbTime');
+
+  const sheet       = $('sheet');
+  const backdrop    = $('backdrop');
+  const libList     = $('libList');
+  const libEmpty    = $('libEmpty');
+
+  const recBtns  = $$('[data-act="rec"]');
+  const toolBtns = $$('[data-tool]');
+
+  let tool = 'select';
+  let color = '#111111';
+  let strokeWidth = 5;
+
+  let strokes = [];
+  let redoStack = [];
+  let current = null;
+  let erasing = false;
+  let selected = null;
+  let drag = null;
+
+  let tokenSeq = 0, strokeSeq = 0;
+  let counters = { home: 0, away: 0 };
+
+  let viewHalf = false;
+  let flipped = false;
+  let collapsed = false;
+
+  // Вид: размеры viewBox и матрица «каток → экран» (a,b,c,d,e,f)
+  let VS = { portrait: false, vw: W, vh: H, M: [1, 0, 0, 1, 0, 0] };
+
+  let rec = null;
+  let lib = [];
+
+  let player = { rec: null, time: 0, playing: false };
+  let replayMode = false;
+  let replayEls = new Map();
+  let speed = 1;
+
+  /* ================= настройки интерфейса ================= */
+
+  function saveUI() {
+    try { localStorage.setItem(UI_KEY, JSON.stringify({ viewHalf, flipped, collapsed })); } catch (e) {}
+  }
+  function loadUI() {
+    try {
+      const s = JSON.parse(localStorage.getItem(UI_KEY) || 'null');
+      if (s) { viewHalf = !!s.viewHalf; flipped = !!s.flipped; collapsed = !!s.collapsed; }
+    } catch (e) {}
+  }
+
+  function setCollapsed(v) {
+    collapsed = v;
+    app.classList.toggle('collapsed', v);
+    closeMenus();
+    saveUI();
+  }
+  hideBtn.addEventListener('click', () => setCollapsed(true));
+  showBtn.addEventListener('click', () => setCollapsed(false));
+
+  /* ================= геометрия ================= */
+
+  function layout() {
+    const aw = Math.max(100, stage.clientWidth);
+    const ah = Math.max(100, stage.clientHeight);
+
+    VS.portrait = ah > aw;
+    const len = viewHalf ? HALF : W;
+
+    if (VS.portrait) { VS.vw = H; VS.vh = len; }
+    else             { VS.vw = len; VS.vh = H; }
+
+    if (!VS.portrait) VS.M = flipped ? [-1, 0, 0, -1, W, H] : [1, 0, 0, 1, 0, 0];
+    else              VS.M = flipped ? [0, -1, 1, 0, 0, W]  : [0, 1, -1, 0, H, 0];
+
+    rinkSvg.setAttribute('viewBox', `0 0 ${VS.vw} ${VS.vh}`);
+    rinkContent.setAttribute('transform', 'matrix(' + VS.M.join(' ') + ')');
+
+    // вписываем без искажения
+    const sc = Math.min(aw / VS.vw, ah / VS.vh);
+    const w = Math.floor(VS.vw * sc);
+    const h = Math.floor(VS.vh * sc);
+
+    board.style.width  = w + 'px';
+    board.style.height = h + 'px';
+
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width  = Math.max(1, Math.round(w * dpr));
+    canvas.height = Math.max(1, Math.round(h * dpr));
+
+    const s = canvas.width / VS.vw;
+    const M = VS.M;
+    ctx.setTransform(M[0] * s, M[1] * s, M[2] * s, M[3] * s, M[4] * s, M[5] * s);
+
+    board.style.setProperty('--u', (w / VS.vw) + 'px');
+
+    viewBtn.textContent = viewHalf ? 'Половина' : 'Полное';
+    repositionAllTokens();
+
+    if (replayMode) renderReplayFrame();
+    else redraw();
+  }
+
+  function toView(x, y) {
+    const M = VS.M;
+    return { u: M[0] * x + M[2] * y + M[4], v: M[1] * x + M[3] * y + M[5] };
+  }
+
+  function fromView(u, v) {
+    const [a, b, c, d, e, f] = VS.M;
+    const det = a * d - b * c;
+    const du = u - e, dv = v - f;
+    return { x: (d * du - c * dv) / det, y: (-b * du + a * dv) / det };
+  }
+
+  function positionToken(el, x, y) {
+    const p = toView(x, y);
+    el.style.left = (p.u / VS.vw * 100) + '%';
+    el.style.top  = (p.v / VS.vh * 100) + '%';
+  }
+
+  function repositionAllTokens() {
+    tokensEl.querySelectorAll('.token').forEach(el =>
+      positionToken(el, parseFloat(el.dataset.x), parseFloat(el.dataset.y)));
+    replayEl.querySelectorAll('.token').forEach(el =>
+      positionToken(el, parseFloat(el.dataset.x), parseFloat(el.dataset.y)));
+  }
+
+  function getPos(e) {
+    const r = board.getBoundingClientRect();
+    const u = (e.clientX - r.left) / r.width  * VS.vw;
+    const v = (e.clientY - r.top)  / r.height * VS.vh;
+    return fromView(u, v);
+  }
+
+  /* ================= рисование ================= */
+
+  function clearCanvas() {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+  }
+
+  function redraw() {
+    if (replayMode) return;
+    clearCanvas();
+    for (const s of strokes) drawStroke(s);
+    if (current) drawStroke(current);
+  }
+
+  function drawStroke(s) {
+    const pts = s.points;
+    if (!pts || !pts.length) return;
+
+    ctx.strokeStyle = s.color;
+    ctx.fillStyle   = s.color;
+    ctx.lineWidth   = s.width;
+    ctx.lineCap     = 'round';
+    ctx.lineJoin    = 'round';
+
+    if (pts.length === 1) {
+      ctx.beginPath();
+      ctx.arc(pts[0].x, pts[0].y, s.width / 2, 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length - 1; i++) {
+      const mx = (pts[i].x + pts[i + 1].x) / 2;
+      const my = (pts[i].y + pts[i + 1].y) / 2;
+      ctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
+    }
+    const last = pts[pts.length - 1];
+    ctx.lineTo(last.x, last.y);
+    ctx.stroke();
+  }
+
+  function segDist(p, a, b) {
+    const vx = b.x - a.x, vy = b.y - a.y;
+    const wx = p.x - a.x, wy = p.y - a.y;
+    const len2 = vx * vx + vy * vy;
+    let t = len2 ? (wx * vx + wy * vy) / len2 : 0;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(p.x - (a.x + t * vx), p.y - (a.y + t * vy));
+  }
+
+  function strokeHit(s, p, R) {
+    const pts = s.points;
+    if (pts.length === 1) return Math.hypot(pts[0].x - p.x, pts[0].y - p.y) < R + s.width;
+    for (let i = 1; i < pts.length; i++) {
+      if (segDist(p, pts[i - 1], pts[i]) < R + s.width / 2) return true;
+    }
+    return false;
+  }
+
+  function eraseAt(p) {
+    const removed = [];
+    strokes = strokes.filter(s => {
+      if (strokeHit(s, p, 14)) { removed.push(s.id); return false; }
+      return true;
+    });
+    if (removed.length) {
+      redoStack = [];
+      for (const id of removed) pushEvent({ type: 'strokeRemove', id });
+      redraw();
+    }
+  }
+
+  /* ================= запись ================= */
+
+  function recNow() {
+    return rec ? (performance.now() - rec.startedAt) / 1000 : 0;
+  }
+
+  function pushEvent(ev) {
+    if (!rec || replayMode) return;
+    ev.t = recNow();
+    rec.events.push(ev);
+  }
+
+  function strokeEvents(s, t) {
+    const out = [{ type: 'strokeStart', id: s.id, strokeType: s.type,
+                   color: s.color, width: s.width,
+                   x: s.points[0].x, y: s.points[0].y, t }];
+    for (let i = 1; i < s.points.length; i++) {
+      out.push({ type: 'strokePoint', id: s.id, x: s.points[i].x, y: s.points[i].y, t });
+    }
+    out.push({ type: 'strokeEnd', id: s.id, t });
+    return out;
+  }
+
+  function startRecording() {
+    if (rec || replayMode) return;
+
+    rec = {
+      id: 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+      name: 'Запись ' + (lib.length + 1),
+      created: Date.now(),
+      events: [],
+      startedAt: performance.now(),
+      duration: 0
+    };
+
+    // исходное состояние
+    for (const s of strokes) rec.events.push(...strokeEvents(s, -1));
+    for (const el of tokensEl.children) {
+      rec.events.push({ type: 'tokenAdd', id: el.dataset.id, kind: el.dataset.kind,
+                        x: parseFloat(el.dataset.x), y: parseFloat(el.dataset.y),
+                        label: el.textContent, t: -1 });
+    }
+    updateRecUI();
+  }
+
+  function stopRecording() {
+    if (!rec) return;
+
+    rec.duration = Math.max(0.2, (performance.now() - rec.startedAt) / 1000);
+    const last = rec.events.length ? rec.events[rec.events.length - 1].t : 0;
+    rec.duration = Math.max(rec.duration, last + 0.1);
+    delete rec.startedAt;
+
+    lib.unshift(rec);
+    rec = null;
+
+    saveLib();
+    renderLib();
+    updateRecUI();
+  }
+
+  let lastRecLabel = '';
+  function updateRecUI() {
+    const on = !!rec;
+    recBtns.forEach(b => {
+      b.classList.toggle('recording', on);
+      b.title = on ? 'Остановить запись' : 'Начать запись';
+    });
+    lastRecLabel = '';
+    updateRecLabel();
+  }
+
+  function updateRecLabel() {
+    const label = rec ? '■ ' + Math.floor(recNow()) + 'с' : '●';
+    if (label === lastRecLabel) return;
+    lastRecLabel = label;
+    recBtns.forEach(b => {
+      b.textContent = b.closest('.mini') ? (rec ? '■' : '●') : label;
+    });
+  }
+
+  recBtns.forEach(b => b.addEventListener('click', () => {
+    if (replayMode) return;
+    if (rec) stopRecording();
+    else startRecording();
+  }));
+
+  function stateAt(events, T) {
+    const strokeMap = new Map();
+    const tokenMap  = new Map();
+
+    for (const ev of events) {
+      if (ev.t > T) break;
+
+      switch (ev.type) {
+        case 'strokeStart':
+          strokeMap.set(ev.id, {
+            id: ev.id, type: ev.strokeType, color: ev.color, width: ev.width,
+            points: [{ x: ev.x, y: ev.y }]
+          });
+          break;
+        case 'strokePoint': {
+          const s = strokeMap.get(ev.id);
+          if (s) s.points.push({ x: ev.x, y: ev.y });
+          break;
+        }
+        case 'strokeRemove':  strokeMap.delete(ev.id); break;
+        case 'clearStrokes':  strokeMap.clear(); break;
+        case 'tokenAdd':
+          tokenMap.set(ev.id, { id: ev.id, kind: ev.kind, x: ev.x, y: ev.y, label: ev.label });
+          break;
+        case 'tokenMove': {
+          const tk = tokenMap.get(ev.id);
+          if (tk) { tk.x = ev.x; tk.y = ev.y; }
+          break;
+        }
+        case 'tokenRemove':   tokenMap.delete(ev.id); break;
+        case 'clearTokens':   tokenMap.clear(); break;
+      }
+    }
+    return { strokes: [...strokeMap.values()], tokens: [...tokenMap.values()] };
+  }
+
+  /* ================= ввод на холсте ================= */
+
+  canvas.addEventListener('pointerdown', e => {
+    if (replayMode || tool === 'select') return;
+    e.preventDefault();
+    closeMenus();
+    canvas.setPointerCapture(e.pointerId);
+    const p = getPos(e);
+
+    if (tool === 'eraser') { erasing = true; eraseAt(p); return; }
+
+    redoStack = [];
+    const id = 'sk' + (++strokeSeq) + '_' + Date.now().toString(36);
+    current = { id, type: 'pen', color, width: strokeWidth, points: [p] };
+
+    pushEvent({ type: 'strokeStart', id, strokeType: 'pen',
+                color, width: strokeWidth, x: p.x, y: p.y });
+    redraw();
+  });
+
+  canvas.addEventListener('pointermove', e => {
+    if (replayMode) return;
+    if (erasing) { eraseAt(getPos(e)); return; }
+    if (!current) return;
+
+    const p = getPos(e);
+    const last = current.points[current.points.length - 1];
+    if (Math.hypot(p.x - last.x, p.y - last.y) > 1.5) {
+      current.points.push(p);
+      pushEvent({ type: 'strokePoint', id: current.id, x: p.x, y: p.y });
+    }
+    redraw();
+  });
+
+  function endStroke() {
+    if (erasing) { erasing = false; return; }
+    if (!current) return;
+
+    const pts = current.points;
+    const a = pts[0], b = pts[pts.length - 1];
+    let len = 0;
+    for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i].x - pts[i-1].x, pts[i].y - pts[i-1].y);
+
+    if (len > 3 || Math.hypot(a.x - b.x, a.y - b.y) > 3) {
+      strokes.push(current);
+      pushEvent({ type: 'strokeEnd', id: current.id });
+    } else {
+      pushEvent({ type: 'strokeRemove', id: current.id });
+    }
+    current = null;
+    redraw();
+  }
+
+  canvas.addEventListener('pointerup', endStroke);
+  canvas.addEventListener('pointercancel', endStroke);
+
+  /* ================= инструменты ================= */
+
+  function updatePointerEvents() {
+    if (replayMode) {
+      canvas.style.pointerEvents = 'none';
+      tokensEl.style.pointerEvents = 'none';
+    } else if (tool === 'select') {
+      canvas.style.pointerEvents = 'none';
+      tokensEl.style.pointerEvents = 'auto';
+    } else {
+      canvas.style.pointerEvents = 'auto';
+      tokensEl.style.pointerEvents = 'none';
+    }
+  }
+
+  function setTool(t) {
+    tool = t;
+    toolBtns.forEach(b => b.classList.toggle('active', b.dataset.tool === t));
+    board.style.cursor = t === 'select' ? 'default' : t === 'eraser' ? 'cell' : 'crosshair';
+    if (t !== 'select' && selected) {
+      selected.classList.remove('selected');
+      selected = null;
+    }
+    updatePointerEvents();
+  }
+
+  toolBtns.forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
+
+  function closeMenus() {
+    colorMenu.hidden = true;
+    addMenu.hidden = true;
+  }
+
+  colorBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    const open = !colorMenu.hidden;
+    closeMenus();
+    colorMenu.hidden = open;
+  });
+
+  addBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    const open = !addMenu.hidden;
+    closeMenus();
+    addMenu.hidden = open;
+  });
+
+  document.addEventListener('pointerdown', e => {
+    if (!e.target.closest('.menu-wrap')) closeMenus();
+  });
+
+  function setColor(c) {
+    color = c;
+    colorBtn.style.setProperty('--c', c);
+    $$('.sw').forEach(b => b.classList.toggle('active', b.dataset.color === c));
+  }
+
+  $$('.sw').forEach(btn => btn.addEventListener('click', () => {
+    setColor(btn.dataset.color);
+    colorMenu.hidden = true;
+    if (tool !== 'pen') setTool('pen');
+  }));
+
+  widthRange.addEventListener('input', e => { strokeWidth = +e.target.value; });
+
+  function undo() {
+    if (replayMode || !strokes.length) return;
+    const s = strokes.pop();
+    redoStack.push(s);
+    pushEvent({ type: 'strokeRemove', id: s.id });
+    redraw();
+  }
+
+  function redo() {
+    if (replayMode || !redoStack.length) return;
+    const s = redoStack.pop();
+    strokes.push(s);
+    if (rec) rec.events.push(...strokeEvents(s, recNow()));
+    redraw();
+  }
+
+  $$('[data-act="undo"]').forEach(b => b.addEventListener('click', undo));
+  $$('[data-act="redo"]').forEach(b => b.addEventListener('click', redo));
+
+  clearBtn.addEventListener('click', () => {
+    if (replayMode || (!strokes.length && !current)) return;
+    strokes = [];
+    redoStack = [];
+    current = null;
+    pushEvent({ type: 'clearStrokes' });
+    redraw();
+  });
+
+  viewBtn.addEventListener('click', () => {
+    viewHalf = !viewHalf;
+    saveUI();
+    layout();
+  });
+
+  flipBtn.addEventListener('click', () => {
+    flipped = !flipped;
+    saveUI();
+    layout();
+  });
+
+  /* ================= фишки ================= */
+
+  function clampX(x) { return Math.max(14, Math.min(W - 14, x)); }
+  function clampY(y) { return Math.max(14, Math.min(H - 14, y)); }
+
+  function createTokenEl(id, kind, label) {
+    const el = document.createElement('div');
+    el.className = 'token ' + kind;
+    el.dataset.id = id;
+    el.dataset.kind = kind;
+    if (label) el.textContent = label;
+    return el;
+  }
+
+  function addToken(kind) {
+    if (replayMode) return;
+
+    const id = 'tk' + (++tokenSeq) + '_' + Date.now().toString(36);
+    let x, y, label = '';
+
+    if (kind === 'puck') {
+      x = 250 + (Math.random() - 0.5) * 50;
+      y = 212 + (Math.random() - 0.5) * 50;
+    } else {
+      const n = ++counters[kind];
+      label = String(n);
+      const base = kind === 'home' ? 170 : 330;
+      x = base + (((n - 1) % 3) - 1) * 42;
+      y = 212 + ((Math.floor((n - 1) / 3) % 3) - 1) * 88;
+    }
+    // в половине поля, повёрнутой на другую сторону, ставим фишки на видимую часть
+    if (viewHalf && flipped) x = W - x;
+
+    x = clampX(x);
+    y = clampY(y);
+
+    const el = createTokenEl(id, kind, label);
+    el.dataset.x = x;
+    el.dataset.y = y;
+    positionToken(el, x, y);
+    el.addEventListener('pointerdown', onTokenDown);
+    el.addEventListener('contextmenu', e => { e.preventDefault(); removeToken(el); });
+    tokensEl.appendChild(el);
+
+    pushEvent({ type: 'tokenAdd', id, kind, x, y, label });
+    if (tool !== 'select') setTool('select');
+    return el;
+  }
+
+  function removeToken(el) {
+    if (replayMode || !el) return;
+    pushEvent({ type: 'tokenRemove', id: el.dataset.id });
+    el.remove();
+    if (selected === el) selected = null;
+  }
+
+  $$('[data-add]').forEach(btn => btn.addEventListener('click', () => {
+    addToken(btn.dataset.add);
+    addMenu.hidden = true;
+  }));
+
+  clearTokensBtn.addEventListener('click', () => {
+    if (replayMode) return;
+    tokensEl.innerHTML = '';
+    selected = null;
+    counters.home = 0;
+    counters.away = 0;
+    pushEvent({ type: 'clearTokens' });
+  });
+
+  function onTokenDown(e) {
+    if (tool !== 'select' || replayMode || e.button === 2) return;
+    e.preventDefault();
+
+    const el = e.currentTarget;
+    const p = getPos(e);
+    drag = { el, offX: parseFloat(el.dataset.x) - p.x, offY: parseFloat(el.dataset.y) - p.y,
+             moved: false, lastRec: 0, sx: e.clientX, sy: e.clientY };
+
+    el.setPointerCapture(e.pointerId);
+    el.classList.add('dragging');
+    el.addEventListener('pointermove', onTokenMove);
+    el.addEventListener('pointerup', onTokenUp);
+    el.addEventListener('pointercancel', onTokenUp);
+  }
+
+  function onTokenMove(e) {
+    if (!drag) return;
+    if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 4) return;
+
+    const p = getPos(e);
+    const x = clampX(p.x + drag.offX);
+    const y = clampY(p.y + drag.offY);
+
+    drag.el.dataset.x = x;
+    drag.el.dataset.y = y;
+    positionToken(drag.el, x, y);
+    drag.moved = true;
+
+    const now = performance.now();
+    if (now - drag.lastRec > 40) {
+      drag.lastRec = now;
+      pushEvent({ type: 'tokenMove', id: drag.el.dataset.id, x, y });
+    }
+  }
+
+  function onTokenUp() {
+    if (!drag) return;
+
+    const el = drag.el;
+    el.classList.remove('dragging');
+    el.removeEventListener('pointermove', onTokenMove);
+    el.removeEventListener('pointerup', onTokenUp);
+    el.removeEventListener('pointercancel', onTokenUp);
+
+    if (drag.moved) {
+      pushEvent({ type: 'tokenMove', id: el.dataset.id,
+                  x: parseFloat(el.dataset.x), y: parseFloat(el.dataset.y) });
+    } else {
+      const now = performance.now();
+      if (el._lastTap && now - el._lastTap < 350) {
+        el._lastTap = 0;
+        removeToken(el);           // двойной тап — удалить
+      } else {
+        el._lastTap = now;
+        selectToken(el);
+      }
+    }
+    drag = null;
+  }
+
+  function selectToken(el) {
+    if (selected === el) {
+      el.classList.remove('selected');
+      selected = null;
+      return;
+    }
+    if (selected) selected.classList.remove('selected');
+    selected = el;
+    el.classList.add('selected');
+  }
+
+  /* ================= воспроизведение ================= */
+
+  function renderReplayFrame() {
+    if (!player.rec) return;
+    const state = stateAt(player.rec.events, player.time);
+    clearCanvas();
+    for (const s of state.strokes) drawStroke(s);
+    syncReplayTokens(state.tokens);
+    updateProgressUI();
+  }
+
+  function syncReplayTokens(tokens) {
+    const seen = new Set();
+    for (const t of tokens) {
+      seen.add(t.id);
+      let el = replayEls.get(t.id);
+      if (!el) {
+        el = createTokenEl(t.id, t.kind, t.label);
+        replayEl.appendChild(el);
+        replayEls.set(t.id, el);
+      }
+      el.dataset.x = t.x;
+      el.dataset.y = t.y;
+      positionToken(el, t.x, t.y);
+    }
+    for (const [id, el] of replayEls) {
+      if (!seen.has(id)) { el.remove(); replayEls.delete(id); }
+    }
+  }
+
+  function fmt(t) { return (t || 0).toFixed(1); }
+
+  function updateProgressUI() {
+    if (!player.rec) return;
+    const d = player.rec.duration;
+    const pct = d > 0 ? (player.time / d) * 100 : 0;
+    progressFill.style.width = Math.min(100, Math.max(0, pct)) + '%';
+    pbTime.textContent = fmt(player.time) + ' / ' + fmt(d) + ' с';
+  }
+
+  function updatePlaybackButtons() {
+    pauseBtn.textContent = player.playing ? '⏸' : '▶';
+  }
+
+  function enterReplay(r) {
+    if (rec) stopRecording();
+    if (replayMode) exitReplay();
+    if (current) endStroke();
+    closeSheet();
+    closeMenus();
+
+    if (selected) { selected.classList.remove('selected'); selected = null; }
+
+    player.rec = r;
+    player.time = 0;
+    player.playing = true;
+
+    replayMode = true;
+    document.body.classList.add('replay-mode');
+    replayEl.innerHTML = '';
+    replayEls.clear();
+
+    playbackBar.hidden = false;
+    pbName.textContent = r.name;
+
+    updatePlaybackButtons();
+    updatePointerEvents();
+    renderReplayFrame();
+  }
+
+  function exitReplay() {
+    if (!replayMode) return;
+
+    replayMode = false;
+    player.playing = false;
+    player.rec = null;
+
+    document.body.classList.remove('replay-mode');
+    replayEl.innerHTML = '';
+    replayEls.clear();
+    playbackBar.hidden = true;
+
+    updatePointerEvents();
+    redraw();
+  }
+
+  pauseBtn.addEventListener('click', () => {
+    if (!player.rec) return;
+    if (player.playing) {
+      player.playing = false;
+    } else {
+      if (player.time >= player.rec.duration) player.time = 0;
+      player.playing = true;
+    }
+    updatePlaybackButtons();
+    renderReplayFrame();
+  });
+
+  restartBtn.addEventListener('click', () => {
+    if (!player.rec) return;
+    player.time = 0;
+    player.playing = true;
+    updatePlaybackButtons();
+    renderReplayFrame();
+  });
+
+  stopBtn.addEventListener('click', exitReplay);
+
+  speedRange.addEventListener('input', () => {
+    speed = SPEEDS[+speedRange.value];
+    speedLabel.textContent = speed + 'x';
+  });
+
+  function seekFromEvent(e) {
+    const r = progressWrap.getBoundingClientRect();
+    const f = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+    player.time = f * player.rec.duration;
+    renderReplayFrame();
+  }
+
+  let seeking = false;
+  progressWrap.addEventListener('pointerdown', e => {
+    if (!player.rec) return;
+    seeking = true;
+    progressWrap.setPointerCapture(e.pointerId);
+    seekFromEvent(e);
+  });
+  progressWrap.addEventListener('pointermove', e => {
+    if (seeking && player.rec) seekFromEvent(e);
+  });
+  const endSeek = () => { seeking = false; };
+  progressWrap.addEventListener('pointerup', endSeek);
+  progressWrap.addEventListener('pointercancel', endSeek);
+
+  /* ================= библиотека ================= */
+
+  function saveLib() {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(lib)); }
+    catch (e) { /* переполнение — игнорируем */ }
+  }
+
+  function loadLib() {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (raw) lib = JSON.parse(raw) || [];
+    } catch (e) { lib = []; }
+  }
+
+  function fmtDate(ts) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    const p = n => String(n).padStart(2, '0');
+    return p(d.getDate()) + '.' + p(d.getMonth() + 1) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  function renderLib() {
+    libList.innerHTML = '';
+    libEmpty.hidden = lib.length > 0;
+    libBadge.textContent = lib.length;
+    libBadge.hidden = lib.length === 0;
+
+    for (const r of lib) {
+      const li = document.createElement('li');
+      li.className = 'lib-item';
+
+      const info = document.createElement('div');
+      info.className = 'lib-info';
+      const nm = document.createElement('div');
+      nm.className = 'lib-name';
+      nm.textContent = r.name;
+      const mt = document.createElement('div');
+      mt.className = 'lib-meta';
+      mt.textContent = fmt(r.duration) + ' с' + (r.created ? ' · ' + fmtDate(r.created) : '');
+      info.append(nm, mt);
+
+      const acts = document.createElement('div');
+      acts.className = 'lib-actions';
+
+      const bPlay = document.createElement('button');
+      bPlay.className = 'play';
+      bPlay.textContent = '▶';
+      bPlay.title = 'Воспроизвести';
+      bPlay.addEventListener('click', () => enterReplay(r));
+
+      const bDel = document.createElement('button');
+      bDel.textContent = '✕';
+      bDel.title = 'Удалить';
+      bDel.addEventListener('click', () => {
+        if (!confirm('Удалить запись «' + r.name + '»?')) return;
+        if (player.rec === r) exitReplay();
+        lib = lib.filter(x => x !== r);
+        saveLib();
+        renderLib();
+      });
+
+      acts.append(bPlay, bDel);
+      li.append(info, acts);
+      libList.appendChild(li);
+    }
+  }
+
+  function openSheet() {
+    closeMenus();
+    sheet.classList.add('open');
+    backdrop.classList.add('open');
+  }
+  function closeSheet() {
+    sheet.classList.remove('open');
+    backdrop.classList.remove('open');
+  }
+  libBtn.addEventListener('click', openSheet);
+  $('sheetClose').addEventListener('click', closeSheet);
+  backdrop.addEventListener('click', closeSheet);
+
+  /* ================= цикл ================= */
+
+  let lastFrame = performance.now();
+
+  function tick(now) {
+    const dt = Math.min((now - lastFrame) / 1000, 0.1);
+    lastFrame = now;
+
+    if (replayMode && player.playing && player.rec) {
+      player.time += dt * speed;
+      if (player.time >= player.rec.duration) {
+        player.time = player.rec.duration;
+        player.playing = false;
+        updatePlaybackButtons();
+      }
+      renderReplayFrame();
+    }
+    if (rec) updateRecLabel();
+
+    requestAnimationFrame(tick);
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeSheet(); closeMenus(); }
+    if (replayMode) {
+      if (e.key === ' ') { pauseBtn.click(); e.preventDefault(); }
+      return;
+    }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selected) {
+      removeToken(selected);
+      e.preventDefault();
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+      if (e.shiftKey) redo(); else undo();
+      e.preventDefault();
+    }
+  });
+
+  // запрет жеста зума на iOS
+  document.addEventListener('gesturestart', e => e.preventDefault());
+
+  /* ================= старт ================= */
+
+  loadUI();
+  app.classList.toggle('collapsed', collapsed);
+
+  setColor(color);
+  setTool('select');
+  loadLib();
+  renderLib();
+  updatePlaybackButtons();
+  updateRecUI();
+  layout();
+
+  new ResizeObserver(() => layout()).observe(stage);
+  window.addEventListener('orientationchange', () => setTimeout(layout, 150));
+
+  requestAnimationFrame(tick);
+
+  addToken('home');
+  addToken('home');
+  addToken('away');
+  addToken('away');
+  addToken('puck');
+})();
+</script>
+</body>
+</html>
