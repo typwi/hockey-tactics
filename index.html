@@ -425,6 +425,10 @@
 </div>
 
 <script>
+/* ===== НАСТРОЙКИ ===== */
+// Надпись на рекламе у синих линий. Строки разделяются символом |
+const AD_TEXT = 'ЗДЕСЬ МОГЛА БЫТЬ | ВАША РЕКЛАМА';
+
 (function () {
   'use strict';
 
@@ -570,6 +574,26 @@
   const F    = x => pw(x, G.src, G.dst);   // каток → нарисованный
   const Finv = x => pw(x, G.dst, G.src);   // нарисованный → каток
 
+  // рекламный щит «под льдом» вдоль синей линии: x — левый край полосы, rot — поворот текста
+  const AD_LINES = AD_TEXT.split('|').map(t => t.trim()).filter(Boolean);
+  const escXML = t => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  function adBand(x, rot) {
+    const fs = 11, lineH = 13;
+    const w = 14 + AD_LINES.length * lineH, h = 220, y = 212.5 - h / 2, cx = x + w / 2;
+    const top = -(AD_LINES.length - 1) * lineH / 2;
+    const lines = AD_LINES.map((t, i) =>
+      `<text x="${cx}" y="${212.5 + top + i * lineH}" text-anchor="middle" dominant-baseline="central">${escXML(t)}</text>`
+    ).join('');
+    return `
+        <g opacity=".2" pointer-events="none">
+          <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="4" fill="#ffffff" stroke="#1d3f73" stroke-width="1.5"/>
+          <g transform="rotate(${rot} ${cx} 212.5)"
+             font-family="-apple-system, 'Helvetica Neue', Arial, sans-serif" font-weight="800" font-size="${fs}"
+             letter-spacing=".6" fill="#1d3f73">${lines}</g>
+        </g>`;
+  }
+
   function buildRink() {
     const L = VS.L;
     const f = F;
@@ -586,6 +610,8 @@
           <image href="${lg.src}" x="${c - lw / 2}" y="${212.5 - lh / 2}" width="${lw}" height="${lh}"
                  preserveAspectRatio="xMidYMid meet" opacity=".42"/>
         </g>
+        ${adBand(f(378) - 5 - 8 - (14 + AD_LINES.length * 13), -90)}
+        ${adBand(f(622) + 5 + 8, 90)}
         <rect x="${f(378) - 5}" y="0" width="10" height="425" fill="#2f74c0" opacity=".9"/>
         <rect x="${f(622) - 5}" y="0" width="10" height="425" fill="#2f74c0" opacity=".9"/>
         <rect x="${c - 5}" y="0" width="10" height="425" fill="#d33a3a" opacity=".92"/>
